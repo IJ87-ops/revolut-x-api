@@ -63,6 +63,38 @@ function formatTrigger(
   return line;
 }
 
+function formatTwapDetails(t: {
+  type: string;
+  price?: string;
+  period: number;
+  frequency: number;
+  total_slices: number;
+  completed_slices: number;
+  start_date: number;
+  end_date: number;
+}): string {
+  let line = `  TWAP:\n` + `    Execution type: ${t.type}\n`;
+  if (t.price) line += `    Price: ${t.price}\n`;
+  line +=
+    `    Period: ${t.period}s\n` +
+    `    Frequency: ${t.frequency}s\n` +
+    `    Total slices: ${t.total_slices}\n` +
+    `    Completed slices: ${t.completed_slices}\n` +
+    `    Started: ${formatDate(t.start_date)}\n` +
+    `    Ends: ${formatDate(t.end_date)}\n`;
+  return line;
+}
+
+function formatTwapTriggeredBy(t: {
+  parent_id: string;
+  slice_index: number;
+}): string {
+  return (
+    `    Parent order ID: ${t.parent_id}\n` +
+    `    Slice index: ${t.slice_index}\n`
+  );
+}
+
 export function registerTradingTools(server: McpServer): void {
   server.registerTool(
     "get_active_orders",
@@ -86,9 +118,11 @@ export function registerTradingTools(server: McpServer): void {
               'Omit to see all open orders; pass ["partially_filled"] to focus on orders with executions in flight.',
           ),
         order_types: z
-          .array(z.enum(["limit", "conditional", "tpsl"]))
+          .array(z.enum(["limit", "conditional", "tpsl", "twap"]))
           .optional()
-          .describe('Filter by order type: "limit", "conditional", "tpsl".'),
+          .describe(
+            'Filter by order type: "limit", "conditional", "tpsl", "twap".',
+          ),
         limit: z
           .number()
           .min(1)
@@ -155,6 +189,7 @@ export function registerTradingTools(server: McpServer): void {
         const stopLossLine = o.stop_loss
           ? formatTrigger("Stop loss", o.stop_loss)
           : "";
+        const twapLine = o.twap ? formatTwapDetails(o.twap) : "";
         lines.push(
           `  Order ID: ${o.id}\n` +
             `  Client Order ID: ${o.client_order_id}\n` +
@@ -167,6 +202,7 @@ export function registerTradingTools(server: McpServer): void {
             conditionalLine +
             takeProfitLine +
             stopLossLine +
+            twapLine +
             `  Quantity: ${o.quantity}\n` +
             (o.amount ? `  Amount: ${o.amount}\n` : "") +
             `  Filled: ${o.filled_quantity}\n` +
@@ -217,10 +253,10 @@ export function registerTradingTools(server: McpServer): void {
               "Omitting this filter returns ALL states including cancelled/rejected with zero filled_amount.",
           ),
         order_types: z
-          .array(z.enum(["market", "limit", "conditional", "tpsl"]))
+          .array(z.enum(["market", "limit", "conditional", "tpsl", "twap"]))
           .optional()
           .describe(
-            'Filter by order type: "market", "limit", "conditional", "tpsl".',
+            'Filter by order type: "market", "limit", "conditional", "tpsl", "twap".',
           ),
         start_date: z
           .string()
@@ -343,6 +379,7 @@ export function registerTradingTools(server: McpServer): void {
         const stopLossLine = o.stop_loss
           ? formatTrigger("Stop loss", o.stop_loss)
           : "";
+        const twapLine = o.twap ? formatTwapDetails(o.twap) : "";
         lines.push(
           `  Order ID: ${o.id}\n` +
             `  Client Order ID: ${o.client_order_id}\n` +
@@ -354,6 +391,7 @@ export function registerTradingTools(server: McpServer): void {
             conditionalLine +
             takeProfitLine +
             stopLossLine +
+            twapLine +
             `  Quantity: ${o.quantity}\n` +
             amountLine +
             `  Filled: ${o.filled_quantity}\n` +
@@ -456,9 +494,10 @@ export function registerTradingTools(server: McpServer): void {
       title: "Get Order by ID",
       description:
         "Get the full details of a single order by its venue order ID. " +
-        "Supports market, limit, conditional, and tpsl orders. " +
+        "Supports market, limit, conditional, tpsl, and twap orders. " +
         "Includes total fees paid (`total_fee` and `fee_currency`) when the venue has reported them — this is the only tool that surfaces per-order fee data. " +
-        "May include `triggered_by` (when this order was submitted by a conditional or TP/SL trigger) or `on_fill` (when a linked TP/SL exit strategy is attached); these are mutually exclusive.",
+        "For twap orders, includes `twap` details (execution type, period, frequency, slices) and `linked_ids` (child order IDs) — these are only available via this tool, not in active or historical order lists. " +
+        "May include `triggered_by` (when this order was submitted by a conditional, TP/SL, or twap trigger) or `on_fill` (when a linked TP/SL exit strategy is attached); these are mutually exclusive.",
       inputSchema: {
         order_id: z.string().describe("The venue order ID to look up."),
       },
@@ -496,6 +535,11 @@ export function registerTradingTools(server: McpServer): void {
       const stopLossLine = o.stop_loss
         ? formatTrigger("Stop loss", o.stop_loss)
         : "";
+      const twapLine = o.twap ? formatTwapDetails(o.twap) : "";
+      const linkedIdsLine = o.twap?.linked_ids?.length
+        ? "  Linked order IDs:\n" +
+          o.twap.linked_ids.map((id) => `    ${id}\n`).join("")
+        : "";
       const triggeredByLine = o.triggered_by
         ? "  Triggered by:\n" +
           `    Reason: ${o.triggered_by.reason}\n` +
@@ -507,6 +551,9 @@ export function registerTradingTools(server: McpServer): void {
             : "") +
           (o.triggered_by.stop_loss
             ? formatTrigger("Stop loss", o.triggered_by.stop_loss)
+            : "") +
+          (o.triggered_by.twap
+            ? "    TWAP:\n" + formatTwapTriggeredBy(o.triggered_by.twap)
             : "")
         : "";
       const onFillLine = o.on_fill
@@ -544,8 +591,10 @@ export function registerTradingTools(server: McpServer): void {
           conditionalLine +
           takeProfitLine +
           stopLossLine +
+          twapLine +
           triggeredByLine +
           onFillLine +
+          linkedIdsLine +
           `  Quantity: ${o.quantity}\n` +
           (o.amount ? `  Amount: ${o.amount}\n` : "") +
           `  Filled: ${o.filled_quantity}\n` +

@@ -1,5 +1,5 @@
 export type OrderSide = "buy" | "sell";
-export type OrderType = "market" | "limit" | "conditional" | "tpsl";
+export type OrderType = "market" | "limit" | "conditional" | "tpsl" | "twap";
 export type OrderStatus =
   | "pending_new"
   | "new"
@@ -15,8 +15,13 @@ export type HistoricalOrderState =
   | "rejected"
   | "replaced"
   | "partially_filled";
-export type ActiveOrderType = "limit" | "conditional" | "tpsl";
-export type HistoricalOrderType = "market" | "limit" | "conditional" | "tpsl";
+export type ActiveOrderType = "limit" | "conditional" | "tpsl" | "twap";
+export type HistoricalOrderType =
+  | "market"
+  | "limit"
+  | "conditional"
+  | "tpsl"
+  | "twap";
 export type TimeInForce = "gtc" | "ioc" | "fok";
 export type PlaceTimeInForce = "gtc" | "ioc";
 export type ExecutionInstruction = "allow_taker" | "post_only";
@@ -31,12 +36,22 @@ export interface OrderTrigger {
   execution_instructions: ExecutionInstruction[];
 }
 
-export type TriggerReason = "conditional" | "take_profit" | "stop_loss";
+export type TriggerReason =
+  | "conditional"
+  | "take_profit"
+  | "stop_loss"
+  | "twap";
+
+export interface TwapTriggeredBy {
+  parent_id: string;
+  slice_index: number;
+}
 
 export interface TriggeredBy {
   conditional?: OrderTrigger;
   take_profit?: OrderTrigger;
   stop_loss?: OrderTrigger;
+  twap?: TwapTriggeredBy;
   reason: TriggerReason;
 }
 
@@ -46,6 +61,18 @@ export interface OnFill {
   id?: string;
 }
 
+export interface TwapOrderDetails {
+  type: "market" | "limit";
+  price?: string;
+  period: number;
+  frequency: number;
+  total_slices: number;
+  completed_slices: number;
+  start_date: number;
+  end_date: number;
+  linked_ids?: string[];
+}
+
 export interface Order {
   id: string;
   previous_order_id?: string;
@@ -53,10 +80,10 @@ export interface Order {
   symbol: string;
   side: OrderSide;
   type: OrderType;
-  quantity: string;
+  quantity?: string;
   filled_quantity: string;
   filled_amount?: string;
-  leaves_quantity: string;
+  leaves_quantity?: string;
   amount?: string;
   price: string;
   average_fill_price?: string;
@@ -67,6 +94,7 @@ export interface Order {
   conditional?: OrderTrigger;
   take_profit?: OrderTrigger;
   stop_loss?: OrderTrigger;
+  twap?: TwapOrderDetails;
   created_date: number;
   updated_date: number;
 }
@@ -78,10 +106,10 @@ export interface OrderDetails {
   symbol: string;
   side: OrderSide;
   type: OrderType;
-  quantity: string;
+  quantity?: string;
   filled_quantity: string;
   filled_amount?: string;
-  leaves_quantity: string;
+  leaves_quantity?: string;
   amount?: string;
   price: string;
   average_fill_price?: string;
@@ -94,6 +122,7 @@ export interface OrderDetails {
   conditional?: OrderTrigger;
   take_profit?: OrderTrigger;
   stop_loss?: OrderTrigger;
+  twap?: TwapOrderDetails;
   triggered_by?: TriggeredBy;
   on_fill?: OnFill;
   created_date: number;

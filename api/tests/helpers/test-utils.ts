@@ -110,6 +110,34 @@ export const mockOrder = {
   updated_date: 1700000000000,
 };
 
+export const mockTwapOrder = {
+  id: "twap-order-123",
+  client_order_id: "twap-order-123",
+  symbol: "BTC/USD",
+  side: "buy",
+  type: "twap",
+  quantity: "0.1",
+  filled_quantity: "0.01",
+  leaves_quantity: "0.09",
+  amount: "6000",
+  filled_amount: "600",
+  price: "0",
+  status: "partially_filled",
+  time_in_force: "gtc",
+  execution_instructions: [],
+  twap: {
+    type: "market",
+    period: 300,
+    frequency: 30,
+    total_slices: 10,
+    completed_slices: 1,
+    start_date: 1783067249312,
+    end_date: 1783067549312,
+  },
+  created_date: 1783067249312,
+  updated_date: 1783067279312,
+};
+
 export const mockOrderBookLevel = {
   aid: "BTC",
   anm: "Bitcoin",

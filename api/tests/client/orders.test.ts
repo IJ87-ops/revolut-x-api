@@ -4,6 +4,7 @@ import {
   createTestClient,
   BASE_URL,
   mockOrder,
+  mockTwapOrder,
 } from "../helpers/test-utils.js";
 
 beforeAll(() => {
@@ -304,6 +305,48 @@ describe("Orders", () => {
       expect(result.data[0].side).toBe("buy");
     });
 
+    it("returns twap orders with twap details", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/active")
+        .reply(200, {
+          data: [mockTwapOrder],
+          metadata: { timestamp: 1700000000000 },
+        });
+
+      const result = await client.getActiveOrders();
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].type).toBe("twap");
+      expect(result.data[0].twap).toBeDefined();
+      expect(result.data[0].twap!.type).toBe("market");
+      expect(result.data[0].twap!.period).toBe(300);
+      expect(result.data[0].twap!.frequency).toBe(30);
+      expect(result.data[0].twap!.total_slices).toBe(10);
+      expect(result.data[0].twap!.completed_slices).toBe(1);
+      expect(result.data[0].twap!.start_date).toBe(1783067249312);
+      expect(result.data[0].twap!.end_date).toBe(1783067549312);
+      expect(result.data[0].twap?.linked_ids).toBeUndefined();
+    });
+
+    it("filters by twap order type", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/active")
+        .query({ order_types: "twap" })
+        .reply(200, {
+          data: [mockTwapOrder],
+          metadata: { timestamp: 1700000000000 },
+        });
+
+      const result = await client.getActiveOrders({
+        orderTypes: ["twap"],
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].type).toBe("twap");
+    });
+
     it("supports pagination with cursor", async () => {
       const client = createTestClient();
       nock(BASE_URL)
@@ -395,6 +438,42 @@ describe("Orders", () => {
       await client.getHistoricalOrders({
         orderTypes: ["conditional", "tpsl"],
       });
+    });
+
+    it("returns twap orders with twap details in historical", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/historical")
+        .reply(200, {
+          data: [{ ...mockTwapOrder, status: "filled" }],
+          metadata: { timestamp: 1700000000000 },
+        });
+
+      const result = await client.getHistoricalOrders();
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].type).toBe("twap");
+      expect(result.data[0].twap).toBeDefined();
+      expect(result.data[0].twap!.type).toBe("market");
+      expect(result.data[0].twap?.linked_ids).toBeUndefined();
+    });
+
+    it("supports twap order type filter", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/historical")
+        .query({ order_types: "twap" })
+        .reply(200, {
+          data: [mockTwapOrder],
+          metadata: { timestamp: 1700000000000 },
+        });
+
+      const result = await client.getHistoricalOrders({
+        orderTypes: ["twap"],
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].type).toBe("twap");
     });
 
     it("handles partially_filled by querying cancelled orders and remapping correctly", async () => {
@@ -676,6 +755,82 @@ describe("Orders", () => {
       const result = await client.getOrder("order-cancelled-empty");
 
       expect(result.data.status).toBe("cancelled");
+    });
+
+    it("returns twap order with linked_ids when present", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/twap-order-123")
+        .reply(200, {
+          data: {
+            ...mockTwapOrder,
+            twap: {
+              ...mockTwapOrder.twap,
+              linked_ids: ["child-order-1", "child-order-2"],
+            },
+          },
+        });
+
+      const result = await client.getOrder("twap-order-123");
+
+      expect(result.data.type).toBe("twap");
+      expect(result.data.twap).toBeDefined();
+      expect(result.data.twap!.type).toBe("market");
+      expect(result.data.twap!.linked_ids).toEqual([
+        "child-order-1",
+        "child-order-2",
+      ]);
+    });
+
+    it("returns twap limit order with price in twap details", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/twap-limit-123")
+        .reply(200, {
+          data: {
+            ...mockTwapOrder,
+            id: "twap-limit-123",
+            twap: {
+              ...mockTwapOrder.twap,
+              type: "limit",
+              price: "10.10",
+              linked_ids: ["child-1", "child-2"],
+            },
+          },
+        });
+
+      const result = await client.getOrder("twap-limit-123");
+
+      expect(result.data.twap!.type).toBe("limit");
+      expect(result.data.twap!.price).toBe("10.10");
+      expect(result.data.twap!.linked_ids).toEqual(["child-1", "child-2"]);
+    });
+
+    it("includes triggered_by with twap reason when present", async () => {
+      const client = createTestClient();
+      nock(BASE_URL)
+        .get("/api/1.0/orders/order-twap-slice")
+        .reply(200, {
+          data: {
+            ...mockOrder,
+            id: "order-twap-slice",
+            triggered_by: {
+              twap: {
+                parent_id: "twap-parent-123",
+                slice_index: 1,
+              },
+              reason: "twap",
+            },
+          },
+        });
+
+      const result = await client.getOrder("order-twap-slice");
+
+      expect(result.data.triggered_by).toBeDefined();
+      expect(result.data.triggered_by!.reason).toBe("twap");
+      expect(result.data.triggered_by!.twap).toBeDefined();
+      expect(result.data.triggered_by!.twap!.parent_id).toBe("twap-parent-123");
+      expect(result.data.triggered_by!.twap!.slice_index).toBe(1);
     });
   });
 

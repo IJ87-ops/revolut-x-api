@@ -5,6 +5,8 @@ import {
   type Order,
   type TriggeredBy,
   type OnFill,
+  type TwapOrderDetails,
+  type TwapTriggeredBy,
   paginateWithDynamicWindows,
   HISTORICAL_ORDERS_API_LIMIT,
 } from "@revolut/revolut-x-api";
@@ -71,6 +73,44 @@ function pushTriggeredByRows(rows: [string, string][], tb: TriggeredBy): void {
   pushTriggerRows(rows, "Conditional Trigger", tb.conditional);
   pushTriggerRows(rows, "Take Profit", tb.take_profit);
   pushTriggerRows(rows, "Stop Loss", tb.stop_loss);
+  if (tb.twap) pushTwapTriggeredByRows(rows, tb.twap);
+}
+
+function pushTwapTriggeredByRows(
+  rows: [string, string][],
+  twap: TwapTriggeredBy,
+): void {
+  rows.push([chalk.cyan.bold(`\n❖ TWAP Trigger`), ""]);
+  rows.push([chalk.gray("  ↳ Parent Order ID"), twap.parent_id]);
+  rows.push([chalk.gray("  ↳ Slice Index"), String(twap.slice_index)]);
+}
+
+function pushTwapDetailsRows(
+  rows: [string, string][],
+  twap: TwapOrderDetails,
+): void {
+  rows.push([chalk.cyan.bold(`\n❖ TWAP Details`), ""]);
+  rows.push([chalk.gray("  ↳ Execution Type"), twap.type]);
+  if (twap.price) rows.push([chalk.gray("  ↳ Price"), twap.price]);
+  rows.push([chalk.gray("  ↳ Period"), `${twap.period}s`]);
+  rows.push([chalk.gray("  ↳ Frequency"), `${twap.frequency}s`]);
+  rows.push([chalk.gray("  ↳ Total Slices"), String(twap.total_slices)]);
+  rows.push([
+    chalk.gray("  ↳ Completed Slices"),
+    String(twap.completed_slices),
+  ]);
+  rows.push([chalk.gray("  ↳ Started"), formatLocalDateTime(twap.start_date)]);
+  rows.push([chalk.gray("  ↳ Ends"), formatLocalDateTime(twap.end_date)]);
+}
+
+function formatTwapConditions(twap: TwapOrderDetails): string {
+  const parts = [
+    `TWAP ${twap.type}`,
+    `${twap.period}s/${twap.frequency}s`,
+    `${twap.completed_slices}/${twap.total_slices} slices`,
+  ];
+  if (twap.price) parts[0] = `TWAP limit @${twap.price}`;
+  return parts.join(", ");
 }
 
 function pushOnFillRows(rows: [string, string][], of: OnFill): void {
@@ -131,6 +171,7 @@ const OPEN_ORDER_COLUMNS: ColumnDef<Order>[] = [
   {
     header: "Conditions",
     accessor: (o) => {
+      if (o.twap) return formatTwapConditions(o.twap);
       const conds: string[] = [];
       if (o.conditional?.trigger_price) {
         const dir = o.conditional.trigger_direction === "ge" ? "≥" : "≤";
@@ -154,6 +195,7 @@ const HISTORY_ORDER_COLUMNS: ColumnDef<Order>[] = [
   {
     header: "Conditions",
     accessor: (o) => {
+      if (o.twap) return formatTwapConditions(o.twap);
       const conds: string[] = [];
       if (o.conditional?.trigger_price) {
         const dir = o.conditional.trigger_direction === "ge" ? "≥" : "≤";
@@ -318,7 +360,7 @@ Examples:
     )
     .option(
       "--order-types <types>",
-      "Filter by types (comma-separated: limit,conditional,tpsl)",
+      "Filter by types (comma-separated: limit,conditional,tpsl,twap)",
     )
     .option("--side <side>", "Filter by side (buy|sell)")
     .option("--limit <n>", "Max results")
@@ -386,7 +428,7 @@ Examples:
     )
     .option(
       "--order-types <types>",
-      "Filter by types (comma-separated: market,limit,conditional,tpsl)",
+      "Filter by types (comma-separated: market,limit,conditional,tpsl,twap)",
     )
     .option(
       "--start-date <date>",
@@ -503,13 +545,13 @@ Examples:
                   : chalk.red("SELL"),
               ],
               ["Type", o.type],
-              ["Quantity", o.quantity],
+              ["Quantity", o.quantity ?? chalk.dim("—")],
               ...(o.amount ? [["Amount", o.amount] as [string, string]] : []),
               ["Filled Qty", o.filled_quantity],
               ...(o.filled_amount
                 ? [["Filled Amt", o.filled_amount] as [string, string]]
                 : []),
-              ["Remaining", o.leaves_quantity],
+              ["Remaining", o.leaves_quantity ?? chalk.dim("—")],
               ["Price", o.price ?? chalk.dim("—")],
               ...(o.average_fill_price
                 ? [["Avg Fill Price", o.average_fill_price] as [string, string]]
@@ -556,8 +598,15 @@ Examples:
             pushTriggerRows(rows, "Take Profit", o.take_profit);
             pushTriggerRows(rows, "Stop Loss", o.stop_loss);
 
+            if (o.twap) pushTwapDetailsRows(rows, o.twap);
             if (o.triggered_by) pushTriggeredByRows(rows, o.triggered_by);
             if (o.on_fill) pushOnFillRows(rows, o.on_fill);
+            if (o.twap?.linked_ids?.length) {
+              rows.push([chalk.cyan.bold(`\n❖ Linked Order IDs`), ""]);
+              for (const linkedId of o.twap.linked_ids) {
+                rows.push([chalk.gray("  ↳"), linkedId]);
+              }
+            }
 
             printKeyValue(rows);
           }
