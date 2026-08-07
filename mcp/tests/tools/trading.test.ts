@@ -131,6 +131,53 @@ describe("trading read-only tools", () => {
     expect(text).toContain("Avg Fill Price: 89500");
   });
 
+  it("get_active_orders displays twap details for twap orders", async () => {
+    mockClient.getActiveOrders.mockResolvedValue({
+      data: [
+        {
+          id: "twap-active-1",
+          client_order_id: "twap-active-1",
+          symbol: "BTC-USD",
+          side: "buy",
+          type: "twap",
+          quantity: "0.1",
+          filled_quantity: "0.01",
+          leaves_quantity: "0.09",
+          amount: "6000",
+          filled_amount: "600",
+          price: "0",
+          status: "partially_filled",
+          time_in_force: "gtc",
+          execution_instructions: [],
+          twap: {
+            type: "market",
+            period: 300,
+            frequency: 30,
+            total_slices: 10,
+            completed_slices: 1,
+            start_date: 1783067249312,
+            end_date: 1783067549312,
+          },
+          created_date: 1783067249312,
+        },
+      ],
+      metadata: { timestamp: 1700000000000 },
+    });
+    const client = await createClient();
+    const result = await client.callTool({
+      name: "get_active_orders",
+      arguments: {},
+    });
+    const text = getText(result);
+    expect(text).toContain("twap-active-1");
+    expect(text).toContain("TWAP:");
+    expect(text).toContain("Execution type: market");
+    expect(text).toContain("Period: 300s");
+    expect(text).toContain("Frequency: 30s");
+    expect(text).toContain("Total slices: 10");
+    expect(text).toContain("Completed slices: 1");
+  });
+
   it("get_historical_orders returns formatted list", async () => {
     mockClient.getHistoricalOrders.mockResolvedValue({
       data: [
@@ -345,6 +392,77 @@ describe("trading read-only tools", () => {
         orderTypes: ["conditional", "tpsl"],
       }),
     );
+  });
+
+  it("get_historical_orders passes twap order type filter", async () => {
+    mockClient.getHistoricalOrders.mockResolvedValue({
+      data: [],
+      metadata: { timestamp: 1700000000000 },
+    });
+    const client = await createClient();
+
+    const result = await client.callTool({
+      name: "get_historical_orders",
+      arguments: {
+        order_types: ["twap"],
+      },
+    });
+
+    expect(getText(result)).toContain("No historical orders found");
+    expect(mockClient.getHistoricalOrders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderTypes: ["twap"],
+      }),
+    );
+  });
+
+  it("get_historical_orders displays twap details for twap orders", async () => {
+    mockClient.getHistoricalOrders.mockResolvedValue({
+      data: [
+        {
+          id: "twap-hist-1",
+          client_order_id: "twap-hist-1",
+          symbol: "BTC-USD",
+          side: "buy",
+          type: "twap",
+          quantity: "0.1",
+          filled_quantity: "0.1",
+          leaves_quantity: "0",
+          amount: "6000",
+          filled_amount: "6000",
+          price: "0",
+          status: "filled",
+          time_in_force: "gtc",
+          execution_instructions: [],
+          twap: {
+            type: "limit",
+            price: "10.10",
+            period: 300,
+            frequency: 30,
+            total_slices: 10,
+            completed_slices: 10,
+            start_date: 1783067249312,
+            end_date: 1783067549312,
+          },
+          created_date: 1783067249312,
+        },
+      ],
+      metadata: { timestamp: 1700000000000 },
+    });
+    const client = await createClient();
+    const result = await client.callTool({
+      name: "get_historical_orders",
+      arguments: {},
+    });
+    const text = getText(result);
+    expect(text).toContain("twap-hist-1");
+    expect(text).toContain("TWAP:");
+    expect(text).toContain("Execution type: limit");
+    expect(text).toContain("Price: 10.10");
+    expect(text).toContain("Period: 300s");
+    expect(text).toContain("Frequency: 30s");
+    expect(text).toContain("Total slices: 10");
+    expect(text).toContain("Completed slices: 10");
   });
 
   it("get_historical_orders renders conditional and tpsl triggers", async () => {
@@ -756,6 +874,137 @@ describe("get_order_by_id", () => {
     expect(text).toContain(">=");
     expect(text).toContain("Stop loss");
     expect(text).toContain("80000");
+  });
+
+  it("returns twap details and linked_ids for twap parent order", async () => {
+    mockClient.getOrder.mockResolvedValue({
+      data: {
+        id: "twap-parent-123",
+        client_order_id: "twap-parent-123",
+        symbol: "BTC-USD",
+        side: "buy",
+        type: "twap",
+        quantity: "0.1",
+        filled_quantity: "0.01",
+        leaves_quantity: "0.09",
+        amount: "6000",
+        filled_amount: "600",
+        price: "0",
+        status: "partially_filled",
+        time_in_force: "gtc",
+        execution_instructions: [],
+        twap: {
+          type: "market",
+          period: 300,
+          frequency: 30,
+          total_slices: 10,
+          completed_slices: 1,
+          started_time: 1783067249312,
+          ends_time: 1783067549312,
+          linked_ids: ["child-order-1", "child-order-2"],
+        },
+        created_date: 1783067249312,
+        updated_date: 1783067279312,
+      },
+    });
+    const client = await createClient();
+    const result = await client.callTool({
+      name: "get_order_by_id",
+      arguments: { order_id: "twap-parent-123" },
+    });
+    const text = getText(result);
+    expect(text).toContain("twap-parent-123");
+    expect(text).toContain("Type: twap");
+    expect(text).toContain("TWAP:");
+    expect(text).toContain("Execution type: market");
+    expect(text).toContain("Period: 300s");
+    expect(text).toContain("Frequency: 30s");
+    expect(text).toContain("Total slices: 10");
+    expect(text).toContain("Completed slices: 1");
+    expect(text).toContain("Linked order IDs:");
+    expect(text).toContain("child-order-1");
+    expect(text).toContain("child-order-2");
+  });
+
+  it("returns twap limit price in twap details", async () => {
+    mockClient.getOrder.mockResolvedValue({
+      data: {
+        id: "twap-limit-456",
+        client_order_id: "twap-limit-456",
+        symbol: "BTC-USD",
+        side: "buy",
+        type: "twap",
+        quantity: "0.1",
+        filled_quantity: "0.1",
+        leaves_quantity: "0",
+        amount: "6000",
+        filled_amount: "6000",
+        price: "0",
+        status: "filled",
+        time_in_force: "gtc",
+        execution_instructions: [],
+        twap: {
+          type: "limit",
+          price: "10.10",
+          period: 300,
+          frequency: 30,
+          total_slices: 10,
+          completed_slices: 10,
+          started_time: 1783067249312,
+          ends_time: 1783067549312,
+          linked_ids: ["child-1", "child-2"],
+        },
+        created_date: 1783067249312,
+        updated_date: 1783067279312,
+      },
+    });
+    const client = await createClient();
+    const result = await client.callTool({
+      name: "get_order_by_id",
+      arguments: { order_id: "twap-limit-456" },
+    });
+    const text = getText(result);
+    expect(text).toContain("Execution type: limit");
+    expect(text).toContain("Price: 10.10");
+  });
+
+  it("returns triggered_by twap for twap slice order", async () => {
+    mockClient.getOrder.mockResolvedValue({
+      data: {
+        id: "twap-slice-789",
+        client_order_id: "co-slice-789",
+        symbol: "BTC-USD",
+        side: "buy",
+        type: "limit",
+        price: "60000",
+        quantity: "0.005",
+        filled_quantity: "0",
+        leaves_quantity: "0.005",
+        status: "new",
+        time_in_force: "gtc",
+        execution_instructions: ["post_only"],
+        triggered_by: {
+          twap: {
+            parent_id: "twap-parent-123",
+            slice_index: 3,
+          },
+          reason: "twap",
+        },
+        created_date: 1700000000000,
+        updated_date: 1700000001000,
+      },
+    });
+    const client = await createClient();
+    const result = await client.callTool({
+      name: "get_order_by_id",
+      arguments: { order_id: "twap-slice-789" },
+    });
+    const text = getText(result);
+    expect(text).toContain("Triggered by:");
+    expect(text).toContain("Reason: twap");
+    expect(text).toContain("TWAP:");
+    expect(text).toContain("Parent order ID: twap-parent-123");
+    expect(text).toContain("Slice index: 3");
   });
 
   it("returns on_fill details with linked order id when order is filled", async () => {

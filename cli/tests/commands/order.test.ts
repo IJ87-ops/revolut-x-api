@@ -77,6 +77,37 @@ const sampleOrder = {
   stop_loss: null,
 };
 
+const sampleTwapOrder = {
+  id: "twap-order-456",
+  client_order_id: "twap-order-456",
+  symbol: "BTC-USD",
+  side: "buy",
+  type: "twap",
+  quantity: "0.1",
+  filled_quantity: "0.01",
+  leaves_quantity: "0.09",
+  amount: "6000",
+  filled_amount: "600",
+  price: "0",
+  status: "partially_filled",
+  time_in_force: "gtc",
+  execution_instructions: [],
+  twap: {
+    type: "market",
+    period: 300,
+    frequency: 30,
+    total_slices: 10,
+    completed_slices: 1,
+    start_date: 1783067249312,
+    end_date: 1783067549312,
+  },
+  created_date: 1783067249312,
+  updated_date: 1783067279312,
+  conditional: null,
+  take_profit: null,
+  stop_loss: null,
+};
+
 function makeProgram() {
   const program = new Command().exitOverride();
   registerOrderCommand(program);
@@ -397,6 +428,15 @@ describe("order open", () => {
     expect(output).toContain("94500");
   });
 
+  it("displays twap conditions for twap open orders", async () => {
+    mockGetActiveOrders.mockResolvedValue({ data: [sampleTwapOrder] });
+    await program.parseAsync(["node", "revx", "order", "open"]);
+    const output = logSpy.mock.calls.flat().join(" ");
+    expect(output).toContain("TWAP");
+    expect(output).toContain("300s/30s");
+    expect(output).toContain("1/10 slices");
+  });
+
   it("shows empty message when no open orders", async () => {
     mockGetActiveOrders.mockResolvedValue({ data: [] });
     await program.parseAsync(["node", "revx", "order", "open"]);
@@ -506,6 +546,33 @@ describe("order history", () => {
         orderTypes: ["conditional", "tpsl"],
       }),
     );
+  });
+
+  it("passes twap order type filter", async () => {
+    await program.parseAsync([
+      "node",
+      "revx",
+      "order",
+      "history",
+      "--order-types",
+      "twap",
+    ]);
+    expect(mockGetHistoricalOrders).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderTypes: ["twap"],
+      }),
+    );
+  });
+
+  it("displays twap conditions for twap historical orders", async () => {
+    mockGetHistoricalOrders.mockResolvedValue({
+      data: [{ ...sampleTwapOrder, status: "filled" }],
+    });
+    await program.parseAsync(["node", "revx", "order", "history"]);
+    const output = logSpy.mock.calls.flat().join(" ");
+    expect(output).toContain("TWAP");
+    expect(output).toContain("300s/30s");
+    expect(output).toContain("1/10 slices");
   });
 
   it("displays conditions column for historical orders with triggers", async () => {
@@ -722,6 +789,80 @@ describe("order get", () => {
     const output = logSpy.mock.calls.flat().join(" ");
     expect(output).toContain("Avg Fill Price");
     expect(output).toContain("94800");
+  });
+
+  it("displays twap details for twap parent order", async () => {
+    mockGetOrder.mockResolvedValue({
+      data: {
+        ...sampleTwapOrder,
+        twap: {
+          ...sampleTwapOrder.twap,
+          linked_ids: ["child-order-1", "child-order-2"],
+        },
+      },
+    });
+    await program.parseAsync([
+      "node",
+      "revx",
+      "order",
+      "get",
+      "twap-order-456",
+    ]);
+    const output = logSpy.mock.calls.flat().join(" ");
+    expect(output).toContain("TWAP Details");
+    expect(output).toContain("market");
+    expect(output).toContain("300s");
+    expect(output).toContain("30s");
+    expect(output).toContain("10");
+    expect(output).toContain("Linked Order IDs");
+    expect(output).toContain("child-order-1");
+    expect(output).toContain("child-order-2");
+  });
+
+  it("displays twap limit price when present", async () => {
+    mockGetOrder.mockResolvedValue({
+      data: {
+        ...sampleTwapOrder,
+        twap: {
+          ...sampleTwapOrder.twap,
+          type: "limit",
+          price: "10.10",
+          linked_ids: ["child-1"],
+        },
+      },
+    });
+    await program.parseAsync([
+      "node",
+      "revx",
+      "order",
+      "get",
+      "twap-order-456",
+    ]);
+    const output = logSpy.mock.calls.flat().join(" ");
+    expect(output).toContain("limit");
+    expect(output).toContain("10.10");
+  });
+
+  it("displays triggered_by twap for twap slice order", async () => {
+    mockGetOrder.mockResolvedValue({
+      data: {
+        ...sampleOrder,
+        triggered_by: {
+          twap: {
+            parent_id: "twap-parent-789",
+            slice_index: 3,
+          },
+          reason: "twap",
+        },
+      },
+    });
+    await program.parseAsync(["node", "revx", "order", "get", "order-123"]);
+    const output = logSpy.mock.calls.flat().join(" ");
+    expect(output).toContain("Triggered By");
+    expect(output).toContain("twap");
+    expect(output).toContain("TWAP Trigger");
+    expect(output).toContain("twap-parent-789");
+    expect(output).toContain("3");
   });
 });
 

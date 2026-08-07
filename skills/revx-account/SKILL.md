@@ -2,7 +2,7 @@
 name: revx-account
 description: >
   Revolut X account and order queries. Use when the user asks to "check my balances",
-  "view open orders", "order history", "order fills", "my trades", "trade history",
+  "view open orders", "order history", "TWAP order", "order fills", "my trades", "trade history",
   or runs revx account, revx order open, revx order history, revx order get,
   revx order fills, revx trade commands.
 ---
@@ -36,9 +36,12 @@ revx account balances --currencies BTC,ETH,USD # Filter by multiple currencies
 revx order open
 revx order open --symbols BTC-USD,ETH-USD --side buy
 revx order open --order-states pending_new,new --order-types limit --limit 50
+revx order open --order-types twap
 ```
 
-**Filters:** `--symbols`, `--order-states` (pending_new, new, partially_filled), `--order-types` (limit, conditional, tpsl), `--side`, `--limit`
+**Filters:** `--symbols`, `--order-states` (pending_new, new, partially_filled), `--order-types` (limit, conditional, tpsl, twap), `--side`, `--limit`
+
+TWAP rows show their execution type (market or limit), optional limit price, period/frequency, and completed/total slice progress.
 
 ## Order History
 
@@ -46,9 +49,10 @@ revx order open --order-states pending_new,new --order-types limit --limit 50
 revx order history
 revx order history --symbols BTC-USD --start-date 7d --end-date today
 revx order history --order-states filled,cancelled --limit 20
+revx order history --order-types twap --start-date 7d
 ```
 
-**Filters:** `--symbols`, `--order-states` (filled, cancelled, rejected, replaced, partially_filled), `--order-types` (market, limit, conditional, tpsl), `--start-date`, `--end-date`, `--limit`
+**Filters:** `--symbols`, `--order-states` (filled, cancelled, rejected, replaced, partially_filled), `--order-types` (market, limit, conditional, tpsl, twap), `--start-date`, `--end-date`, `--limit`
 
 **Default:** When no dates are specified, returns the last 30 days. Time formats: relative (`7d`, `1w`, `today`), ISO date (`2025-04-14`), Unix epoch ms.
 
@@ -66,8 +70,11 @@ Optional fields in order details output (shown only when present):
 - `average_fill_price` — volume-weighted average execution price (shown as "Avg Fill Price"); only present for filled or partially filled orders
 - `total_fee` / `fee_currency` — total fee charged and the currency it was paid in
 - `conditional` / `take_profit` / `stop_loss` — trigger definitions on conditional and TPSL orders; each includes trigger price, direction (≥/≤), order type (market/limit), time in force, and optional limit price
-- `triggered_by` — present when this order was submitted by a conditional or TP/SL trigger; includes a `reason` (`conditional`, `take_profit`, or `stop_loss`) and the trigger definition that fired. Mutually exclusive with `on_fill`.
+- `twap` — schedule and progress for a TWAP parent order: child execution type (`market` or `limit`), optional limit `price`, `period` and `frequency` in seconds, total/completed slices, start/end times, and (for `order get`) any linked child order IDs
+- `triggered_by` — present when this order was submitted by a conditional, TP/SL, or TWAP trigger; `reason: twap` includes the TWAP parent order ID and slice index. Mutually exclusive with `on_fill`.
 - `on_fill` — present when a linked TP/SL exit strategy is attached to this order; includes take-profit / stop-loss triggers and, once the order is filled, the linked order `id`. Mutually exclusive with `triggered_by`.
+
+For a full TWAP execution tree, run `revx order get <twap-parent-id>` and then inspect each linked child ID with `revx order get <child-id>`. Linked child IDs are available on the parent detail response, not in open-order or history lists.
 
 ---
 
