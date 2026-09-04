@@ -1,0 +1,5 @@
+trader/node_modules/
+trader/dist/
+trader/*.db
+trader/.env
+.DS_Store
