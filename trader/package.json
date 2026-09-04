@@ -1,0 +1,57 @@
+{
+  "name": "@revolut/revolut-x-trader",
+  "version": "1.0.0",
+  "description": "AI-powered automated trading engine for Revolut X",
+  "keywords": [
+    "trading",
+    "crypto",
+    "ai",
+    "openai",
+    "revolut-x"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IJ87-ops/revolut-x-api",
+    "directory": "trader"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "revx-trader": "dist/bin/trader.js"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/bin/trader.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@revolut/revolut-x-api": "^1.0.0",
+    "better-sqlite3": "^11.7.0",
+    "decimal.js": "^10.6.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
