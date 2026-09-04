@@ -1,13 +1,16 @@
 /**
- * Type definitions for the trading engine
+ * Type definitions for the enhanced trading engine
  */
 
 export interface MarketData {
-  symbol: string;
+  symbol?: string;
   bid: string;
   ask: string;
   last: string;
-  timestamp: number;
+  volume24h?: string;
+  high24h?: string;
+  low24h?: string;
+  timestamp?: Date | number;
 }
 
 export interface TechnicalIndicators {
@@ -49,15 +52,28 @@ export interface TradingDecision {
 
 export interface ExecutedTrade {
   id: string;
-  orderId: string;
+  orderId?: string;
   symbol: string;
   side: "buy" | "sell";
   quantity: string;
-  filledPrice: string;
-  timestamp: number;
-  exitPrice?: string;
-  closedAt?: number;
+  entryPrice: string;
+  exitPrice: string | null;
+  filledPrice?: string;
+  riskRewardRatio: number;
+  expectedWinProbability: number;
+  stopLoss: string;
+  takeProfit: string;
+  entryFees: string;
+  exitFees: string | null;
+  pnl: string | null;
+  pnlPercent: number | null;
+  aiReasoning: string;
   status: "open" | "closed" | "cancelled";
+  timestamp?: number;
+  createdAt: Date;
+  closedAt: Date | null;
+  updatedAt: Date;
+  mode: "paper" | "live";
 }
 
 export interface RiskAnalysis {
@@ -68,4 +84,37 @@ export interface RiskAnalysis {
   riskRewardRatio: number;
   isAcceptable: boolean;
   reason: string;
+}
+
+export interface TradeRecord {
+  id: string;
+  symbol: string;
+  side: "buy" | "sell";
+  entryPrice: string;
+  exitPrice: string | null;
+  quantity: string;
+  entryFees: string;
+  exitFees: string | null;
+  profitLoss: string | null;
+  profitLossPercent: number | null;
+  status: "open" | "closed";
+  reason: string;
+  aiAnalysis: string;
+  createdAt: Date;
+  closedAt: Date | null;
+  mode: "paper" | "live";
+}
+
+export interface SessionMetrics {
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number; // 0-1
+  totalProfit: string;
+  totalLoss: string;
+  netProfit: string;
+  averageWin: string;
+  averageLoss: string;
+  profitFactor: number; // Total wins / Total losses
+  riskRewardRatio: number; // Average reward / Average risk
 }
